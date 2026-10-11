@@ -1,5 +1,13 @@
-import 'dart:math' as math;
 import 'complex.dart';
+import 'bloco_circuito.dart';
+
+enum TipoFonte { tensao, corrente }
+
+class FonteEletrica {
+  final double magnitude;
+  final double anguloGraus;
+  const FonteEletrica({required this.magnitude, required this.anguloGraus});
+}
 
 class CircuitResult {
   final Complex zEquivalente;
@@ -12,8 +20,9 @@ class CircuitResult {
   final double fatorDePotencia;
   final double anguloDefasagem;
   final String comportamento;
+  final TipoFonte tipoFonte;
 
-  const CircuitResult({
+  CircuitResult({
     required this.zEquivalente,
     required this.correnteTotal,
     required this.tensaoFonte,
@@ -24,48 +33,70 @@ class CircuitResult {
     required this.fatorDePotencia,
     required this.anguloDefasagem,
     required this.comportamento,
+    required this.tipoFonte,
   });
 }
 
 class CircuitSolver {
   static CircuitResult resolver({
-    required Complex tensaoFonte,
-    required Complex zEquivalente,
+    required List<BlocoCircuito> blocos,
+    required TipoFonte tipoFonte,
+    required List<FonteEletrica> fontes,
   }) {
-    final corrente = tensaoFonte / zEquivalente;
-    final s = tensaoFonte * corrente.conjugate;
+    var zEq = const Complex(0, 0);
+    for (final b in blocos) {
+      zEq = zEq + b.impedancia;
+    }
 
-    final p = s.re;
-    final q = s.im;
-    final sMag = s.magnitude;
+    Complex tensaoFonte;
+    Complex correnteTotal;
 
-    final anguloZ = zEquivalente.angleDeg;
-    final fp = sMag == 0 ? 1.0 : p / sMag;
+    if (tipoFonte == TipoFonte.tensao) {
+      var somaTensoes = const Complex(0, 0);
+      for (final f in fontes) {
+        somaTensoes = somaTensoes + Complex.fromPolar(f.magnitude, f.anguloGraus);
+      }
+      tensaoFonte = somaTensoes;
+      correnteTotal = tensaoFonte / zEq;
+    } else {
+      final fonte = fontes.first;
+      correnteTotal = Complex.fromPolar(fonte.magnitude, fonte.anguloGraus);
+      tensaoFonte = correnteTotal * zEq;
+    }
+
+    final potenciaComplexa = tensaoFonte * correnteTotal.conjugate;
+
+    final p = potenciaComplexa.re;
+    final q = potenciaComplexa.im;
+    final s = potenciaComplexa.magnitude;
+    final fp = s == 0 ? 1.0 : p / s;
+    final anguloDefasagem = zEq.angleDeg;
 
     String comportamento;
-    if (anguloZ > 0.01) {
+    if (anguloDefasagem > 0.01) {
       comportamento = 'indutivo';
-    } else if (anguloZ < -0.01) {
+    } else if (anguloDefasagem < -0.01) {
       comportamento = 'capacitivo';
     } else {
       comportamento = 'resistivo';
     }
 
     return CircuitResult(
-      zEquivalente: zEquivalente,
-      correnteTotal: corrente,
+      zEquivalente: zEq,
+      correnteTotal: correnteTotal,
       tensaoFonte: tensaoFonte,
-      potenciaComplexa: s,
+      potenciaComplexa: potenciaComplexa,
       potenciaAtiva: p,
       potenciaReativa: q,
-      potenciaAparente: sMag,
+      potenciaAparente: s,
       fatorDePotencia: fp,
-      anguloDefasagem: anguloZ,
+      anguloDefasagem: anguloDefasagem,
       comportamento: comportamento,
+      tipoFonte: tipoFonte,
     );
   }
 
-  static Complex tensaoNoElemento(Complex correnteTotal, Complex zElemento) {
-    return correnteTotal * zElemento;
+  static Complex tensaoNoElemento(Complex corrente, Complex impedancia) {
+    return corrente * impedancia;
   }
 }

@@ -1,42 +1,54 @@
 import 'package:flutter/material.dart';
+import '../calculation/bloco_circuito.dart';
 import '../calculation/elemento_circuito.dart';
-import '../telas/entrada_dados_tela.dart' show TipoConexao;
 
 class EsquematicoWidget extends StatelessWidget {
-  final List<ElementoCircuito> elementos;
-  final TipoConexao tipoConexao;
+  final List<BlocoCircuito> blocos;
+  final double tensaoRms;
+  final double anguloFonteGraus;
 
   const EsquematicoWidget({
     super.key,
-    required this.elementos,
-    required this.tipoConexao,
+    required this.blocos,
+    required this.tensaoRms,
+    required this.anguloFonteGraus,
   });
 
   @override
   Widget build(BuildContext context) {
-    final altura = tipoConexao == TipoConexao.serie ? 200.0 : 260.0;
+    final temAlgumParalelo = blocos.any((b) => b.ehParalelo);
+    final maiorGrupo = blocos.fold<int>(1, (acc, b) => b.elementos.length > acc ? b.elementos.length : acc);
+    final altura = temAlgumParalelo ? (140.0 + maiorGrupo * 55.0) : 200.0;
+    final largura = 220.0 + blocos.length * 130.0;
+
+    final temElementos = blocos.any((b) => b.elementos.isNotEmpty);
+
     return Container(
       width: double.infinity,
-      height: altura,
+      height: altura.clamp(200.0, 620.0),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black12),
       ),
-      child: elementos.isEmpty
+      child: !temElementos
           ? const Center(child: Text('Adicione elementos para ver o esquematico', style: TextStyle(color: Colors.black38)))
           : LayoutBuilder(
               builder: (context, constraints) {
                 return InteractiveViewer(
-                  minScale: 0.5,
+                  minScale: 0.4,
                   maxScale: 5,
-                  boundaryMargin: const EdgeInsets.all(60),
+                  boundaryMargin: const EdgeInsets.all(80),
                   child: SizedBox(
-                    width: constraints.maxWidth,
+                    width: largura.clamp(constraints.maxWidth, 4000.0),
                     height: constraints.maxHeight,
                     child: CustomPaint(
-                      painter: _EsquematicoPainter(elementos: elementos, tipoConexao: tipoConexao),
+                      painter: _EsquematicoPainter(
+                        blocos: blocos,
+                        tensaoRms: tensaoRms,
+                        anguloFonteGraus: anguloFonteGraus,
+                      ),
                     ),
                   ),
                 );
@@ -47,10 +59,15 @@ class EsquematicoWidget extends StatelessWidget {
 }
 
 class _EsquematicoPainter extends CustomPainter {
-  final List<ElementoCircuito> elementos;
-  final TipoConexao tipoConexao;
+  final List<BlocoCircuito> blocos;
+  final double tensaoRms;
+  final double anguloFonteGraus;
 
-  _EsquematicoPainter({required this.elementos, required this.tipoConexao});
+  _EsquematicoPainter({
+    required this.blocos,
+    required this.tensaoRms,
+    required this.anguloFonteGraus,
+  });
 
   final Paint _linha = Paint()
     ..color = Colors.black87
@@ -59,79 +76,8 @@ class _EsquematicoPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (elementos.isEmpty) return;
-    switch (tipoConexao) {
-      case TipoConexao.serie:
-        _desenharSerie(canvas, size);
-        break;
-      case TipoConexao.paralelo:
-        _desenharParalelo(canvas, size);
-        break;
-      case TipoConexao.misto:
-        _desenharMisto(canvas, size);
-        break;
-    }
-  }
-
-  void _desenharSerie(Canvas canvas, Size size) {
-    final yTop = 65.0;
-    final yBottom = size.height - 35.0;
-    final xEsq = 70.0;
-    final xDir = size.width - 45.0;
-    final n = elementos.length;
-
-    _desenharFonteVertical(canvas, Offset(xEsq, yTop), Offset(xEsq, yBottom));
-
-    final espacamento = (xDir - xEsq) / (n + 1);
-    double xAnterior = xEsq;
-    for (var i = 0; i < n; i++) {
-      final cx = xEsq + espacamento * (i + 1);
-      canvas.drawLine(Offset(xAnterior, yTop), Offset(cx - 30, yTop), _linha);
-      _desenharSimbolo(canvas, elementos[i], Offset(cx, yTop));
-      xAnterior = cx + 30;
-    }
-    canvas.drawLine(Offset(xAnterior, yTop), Offset(xDir, yTop), _linha);
-    canvas.drawLine(Offset(xDir, yTop), Offset(xDir, yBottom), _linha);
-    canvas.drawLine(Offset(xDir, yBottom), Offset(xEsq, yBottom), _linha);
-  }
-
-  void _desenharParalelo(Canvas canvas, Size size) {
-    final n = elementos.length;
-    final yTop = 65.0;
-    final yBottom = size.height - 70.0;
-    final yRetorno = size.height - 30.0;
-    final xFonte = 70.0;
-    final xA = 130.0;
-    final xB = size.width - 110.0;
-    final centroX = (xA + xB) / 2;
-
-    _desenharFonteVertical(canvas, Offset(xFonte, yTop), Offset(xFonte, yBottom));
-
-    canvas.drawLine(Offset(xA, yTop), Offset(xA, yBottom), _linha);
-    canvas.drawLine(Offset(xB, yTop), Offset(xB, yBottom), _linha);
-    canvas.drawLine(Offset(xFonte, yTop), Offset(xA, yTop), _linha);
-
-    canvas.drawLine(Offset(xFonte, yBottom), Offset(xFonte, yRetorno), _linha);
-    canvas.drawLine(Offset(xFonte, yRetorno), Offset(xB, yRetorno), _linha);
-    canvas.drawLine(Offset(xB, yRetorno), Offset(xB, yBottom), _linha);
-
-    final espV = n > 1 ? (yBottom - yTop) / (n - 1) : 0.0;
-    for (var i = 0; i < n; i++) {
-      final y = n > 1 ? yTop + espV * i : (yTop + yBottom) / 2;
-      canvas.drawLine(Offset(xA, y), Offset(centroX - 30, y), _linha);
-      canvas.drawLine(Offset(centroX + 30, y), Offset(xB, y), _linha);
-      _desenharSimbolo(canvas, elementos[i], Offset(centroX, y));
-    }
-  }
-
-  void _desenharMisto(Canvas canvas, Size size) {
-    if (elementos.length < 3) {
-      _desenharSerie(canvas, size);
-      return;
-    }
-    final z1 = elementos[0];
-    final z2 = elementos[1];
-    final z3 = elementos[2];
+    final blocosValidos = blocos.where((b) => b.elementos.isNotEmpty).toList();
+    if (blocosValidos.isEmpty) return;
 
     final xFonte = 60.0;
     final yTop = 65.0;
@@ -139,31 +85,56 @@ class _EsquematicoPainter extends CustomPainter {
     final yMeio = (yTop + yBottom) / 2;
 
     _desenharFonteVertical(canvas, Offset(xFonte, yTop), Offset(xFonte, yBottom));
+    _desenharRotuloFonte(canvas, Offset(xFonte, yMeio));
 
-    final xZ1 = 150.0;
-    canvas.drawLine(Offset(xFonte, yTop), Offset(xZ1 - 30, yTop), _linha);
-    _desenharSimbolo(canvas, z1, Offset(xZ1, yTop));
+    final n = blocosValidos.length;
+    final larguraUtil = size.width - xFonte - 60.0;
+    final passo = larguraUtil / n;
 
-    final xA = xZ1 + 90;
-    final xB = size.width - 90.0;
-    final centroX = (xA + xB) / 2;
-    final yRamoTop = yMeio - 30;
-    final yRamoBottom = yMeio + 50;
+    double xAtual = xFonte;
+    for (var i = 0; i < n; i++) {
+      final centroX = xFonte + passo * (i + 0.5) + 30;
+      _desenharBloco(canvas, blocosValidos[i], centroX, yTop, yBottom, xAtual);
+      xAtual = centroX + 60;
+    }
 
-    canvas.drawLine(Offset(xZ1 + 30, yTop), Offset(xA, yTop), _linha);
-    canvas.drawLine(Offset(xA, yTop), Offset(xA, yRamoBottom), _linha);
-    canvas.drawLine(Offset(xB, yRamoTop), Offset(xB, yRamoBottom), _linha);
+    canvas.drawLine(Offset(xAtual, yTop), Offset(size.width - 40, yTop), _linha);
+    canvas.drawLine(Offset(size.width - 40, yTop), Offset(size.width - 40, yBottom), _linha);
+    canvas.drawLine(Offset(size.width - 40, yBottom), Offset(xFonte, yBottom), _linha);
+  }
 
-    canvas.drawLine(Offset(xA, yRamoTop), Offset(centroX - 30, yRamoTop), _linha);
-    canvas.drawLine(Offset(centroX + 30, yRamoTop), Offset(xB, yRamoTop), _linha);
-    _desenharSimbolo(canvas, z2, Offset(centroX, yRamoTop));
+  void _desenharBloco(Canvas canvas, BlocoCircuito bloco, double centroX, double yTop, double yBottom, double xEntradaFioAnterior) {
+    canvas.drawLine(Offset(xEntradaFioAnterior, yTop), Offset(centroX - 30, yTop), _linha);
 
-    canvas.drawLine(Offset(xA, yRamoBottom), Offset(centroX - 30, yRamoBottom), _linha);
-    canvas.drawLine(Offset(centroX + 30, yRamoBottom), Offset(xB, yRamoBottom), _linha);
-    _desenharSimbolo(canvas, z3, Offset(centroX, yRamoBottom));
+    if (!bloco.ehParalelo) {
+      _desenharSimbolo(canvas, bloco.elementos.first, Offset(centroX, yTop));
+      return;
+    }
 
-    canvas.drawLine(Offset(xB, yRamoBottom), Offset(xB, yBottom), _linha);
-    canvas.drawLine(Offset(xB, yBottom), Offset(xFonte, yBottom), _linha);
+    final n = bloco.elementos.length;
+    final yMeio = (yTop + yBottom) / 2;
+    final alturaDisponivel = (yBottom - yTop) - 40;
+    final espV = n > 1 ? alturaDisponivel / (n - 1) : 0.0;
+    final yInicio = yTop + 20;
+
+    final xA = centroX - 45;
+    final xB = centroX + 45;
+
+    canvas.drawLine(Offset(centroX - 30, yTop), Offset(xA, yTop), _linha);
+
+    final yPrimeiro = yInicio;
+    final yUltimo = n > 1 ? yInicio + espV * (n - 1) : yInicio;
+    canvas.drawLine(Offset(xA, yTop), Offset(xA, yUltimo), _linha);
+    canvas.drawLine(Offset(xB, yTop), Offset(xB, yUltimo), _linha);
+
+    for (var i = 0; i < n; i++) {
+      final y = n > 1 ? yInicio + espV * i : yMeio;
+      canvas.drawLine(Offset(xA, y), Offset(centroX - 30, y), _linha);
+      canvas.drawLine(Offset(centroX + 30, y), Offset(xB, y), _linha);
+      _desenharSimbolo(canvas, bloco.elementos[i], Offset(centroX, y));
+    }
+
+    canvas.drawLine(Offset(xB, yTop), Offset(centroX + 30, yTop), _linha);
   }
 
   void _desenharFonteVertical(Canvas canvas, Offset topo, Offset base) {
@@ -176,6 +147,16 @@ class _EsquematicoPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, centro - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  void _desenharRotuloFonte(Canvas canvas, Offset centro) {
+    final texto = '${tensaoRms.toStringAsFixed(2)} V \u2220 ${anguloFonteGraus.toStringAsFixed(0)}\u00b0';
+    final tp = TextPainter(
+      text: TextSpan(text: texto, style: const TextStyle(color: Colors.indigo, fontSize: 11, fontWeight: FontWeight.w700)),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout(maxWidth: 110);
+    tp.paint(canvas, Offset(centro.dx - tp.width / 2, centro.dy + 24));
   }
 
   void _desenharSimbolo(Canvas canvas, ElementoCircuito elemento, Offset centro) {

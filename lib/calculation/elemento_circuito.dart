@@ -1,3 +1,4 @@
+
 import 'complex.dart';
 
 enum TipoElemento { resistor, indutor, capacitor }
@@ -5,11 +6,11 @@ enum TipoElemento { resistor, indutor, capacitor }
 double anguloParaTipo(TipoElemento tipo) {
   switch (tipo) {
     case TipoElemento.resistor:
-      return 0;
+      return 0.0;
     case TipoElemento.indutor:
-      return 90;
+      return 90.0;
     case TipoElemento.capacitor:
-      return -90;
+      return -90.0;
   }
 }
 
@@ -18,7 +19,7 @@ class ElementoCircuito {
   final TipoElemento tipo;
   final double valorOhms;
 
-  const ElementoCircuito({
+  ElementoCircuito({
     required this.nome,
     required this.tipo,
     required this.valorOhms,
@@ -27,9 +28,6 @@ class ElementoCircuito {
   double get angulo => anguloParaTipo(tipo);
 
   Complex get impedancia => Complex.fromPolar(valorOhms, angulo);
-
-  String get rotuloExibicao =>
-      '$nome: ${valorOhms.toStringAsFixed(1)} \u2220 ${angulo.toStringAsFixed(0)}\u00b0 \u03a9';
 
   String get nomeTipo {
     switch (tipo) {
@@ -41,4 +39,7 @@ class ElementoCircuito {
         return 'Capacitor';
     }
   }
+
+  String get rotuloExibicao =>
+      '$nome\n${valorOhms.toStringAsFixed(2)} \u2126 \u2220 ${angulo.toStringAsFixed(0)}\u00b0';
 }
